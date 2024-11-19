@@ -1,0 +1,136 @@
+forms:
+class ClassFeeForm(forms.ModelForm):
+    class Meta:
+        model = ClassFee
+        fields = ['class_code', 'fee_amount']
+
+    # Override the init method to dynamically add fields for each fee type
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        fee_types = FeeType.objects.all()
+        for fee_type in fee_types:
+            # Dynamically add a field for each fee_type with the corresponding label
+            self.fields[f'fee_amount_{fee_type.fee_code}'] = forms.IntegerField(
+                label=fee_type.fee_type, required=False,
+                widget=forms.NumberInput(attrs={'class': 'form-control'})
+            )
+
+
+
+
+
+View:
+def classFeeAdd(request):
+    form = ClassFeeForm()
+    if request.method == 'POST':
+        form = ClassFeeForm(request.POST)
+        if form.is_valid():
+            class_code = form.cleaned_data['class_code']
+            class_fee = ClassFee(class_code=class_code)
+            # For each fee type, save the fee_amount
+            fee_types = FeeType.objects.all()
+            for fee_type in fee_types:
+                fee_amount_field = f'fee_amount_{fee_type.fee_code}'
+                fee_amount = form.cleaned_data.get(fee_amount_field)
+                if fee_amount is not None:
+                    # Save the fee amount for the corresponding FeeType
+                    class_fee.fee_amount = fee_amount
+                    class_fee.save()  # Or update, depending on your logic
+            return redirect('class_fee')  # Redirect to class fee list
+    return render(request, 'class_fee/create.html', {'form': form})
+
+
+
+
+class_fee/create.html:
+{% extends 'base.html' %}
+
+{% block title %}Class Fee Add{% endblock title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-lg">
+                <div class="card-header text-center bg-primary text-white">
+                    <h1>Class Fee Add <span><a href="{% url 'class_fee' %}" class="btn-close btn-close-white fs-5 float-end"></a></span></h1>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'class_fee_add' %}">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            {% for field in form %}
+                                <label for="{{ field.id_for_label }}" class="form-label">
+                                    {{ field.label }}
+                                </label>
+                                {{ field }}
+                                <br>
+                            {% endfor %}
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block mt-3 form-control">Class Fee Add</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+
+
+class_fee/read.html:
+{% extends 'base.html' %}
+
+{% block title %}Class Fee{% endblock title %}
+
+{% block fee_navbar %}
+    <!-- Navigation remains the same -->
+{% endblock fee_navbar %}
+
+{% block content %}
+<div class="mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="text-center mb-0">Class Fee</h2>
+                    <a class="btn btn-light btn-sm float-end" href="{% url 'class_fee_add' %}">Add <i class="fa-solid fa-plus"></i></a>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover table-bordered mb-0">
+                        <thead class="bg-light">
+                            <tr class="text-center">
+                                <th class="text-primary">Class Code</th>
+                                <th class="text-primary">Fee Amount</th>
+                                {% for fee_type in fee_type %}
+                                    <th class="text-primary">{{ fee_type.fee_type }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for class_fee in class_fee %}
+                                <tr class="text-center align-middle">
+                                    <td>{{ class_fee.class_code }}</td>
+                                    <td>{{ class_fee.fee_amount }}</td>
+                                    {% for fee_type in fee_type %}
+                                        <td>
+                                            {% if class_fee.class_code.fee_set.filter(fee_code=fee_type.fee_code).exists %}
+                                                {{ class_fee.class_code.fee_set.get(fee_code=fee_type.fee_code).fee_amount }}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                    <td><a class="btn btn-warning btn-sm" href="{% url 'class_fee_edit' class_fee.class_code %}">Edit <i class="fa-regular fa-pen-to-square"></i></a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+
